@@ -1,0 +1,18 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "pl.intruz.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "MinecraftClientAccessor",
+    "EntityMixin",
+    "PlayerEntityMixin",
+    "ClientPlayerEntityMixin",
+    "InGameOverlayRendererMixin",
+    "InGameHudMixin",
+    "PlayerListHudMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  }
+}

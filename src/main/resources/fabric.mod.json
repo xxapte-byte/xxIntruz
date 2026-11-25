@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "intruz",
+  "version": "${version}",
+  "name": "Intruz",
+  "description": "Intruz - client mod z konfigurowalnym GUI (klawisz P).",
+  "authors": ["You"],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["pl.intruz.IntruzClient"]
+  },
+  "mixins": ["intruz.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "~1.21.4",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}
