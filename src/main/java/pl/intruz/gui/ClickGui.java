@@ -1,8 +1,14 @@
 package pl.intruz.gui;
 
+import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.texture.NativeImage;
+import net.minecraft.client.texture.NativeImageBackedTexture;
 import net.minecraft.client.util.InputUtil;
+import net.minecraft.util.Identifier;
 import net.minecraft.text.OrderedText;
 import net.minecraft.text.Text;
 import org.lwjgl.glfw.GLFW;
@@ -11,6 +17,9 @@ import pl.intruz.module.Module;
 import pl.intruz.module.ModuleManager;
 import pl.intruz.module.Setting;
 
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -54,7 +63,34 @@ public class ClickGui extends Screen {
     private boolean searching;
     private String search = "";
 
-    public ClickGui() { super(Text.literal("Intruz")); }
+    // tlo okna: config/intruz_background.png (PNG, dowolny rozmiar)
+    private static final int BG_DIM = 0xA0000000; // przyciemnienie zdjecia (alfa 0-255 w pierwszym bajcie)
+    private Identifier bgId;
+    private int bgW, bgH;
+
+    public ClickGui() {
+        super(Text.literal("Intruz"));
+        loadBackground();
+    }
+
+    private void loadBackground() {
+        try {
+            Path p = FabricLoader.getInstance().getConfigDir().resolve("intruz_background.png");
+            if (!Files.exists(p)) return;
+            try (InputStream in = Files.newInputStream(p)) {
+                NativeImage img = NativeImage.read(in);
+                bgW = img.getWidth();
+                bgH = img.getHeight();
+                Identifier id = Identifier.of("intruz", "background");
+                MinecraftClient.getInstance().getTextureManager()
+                        .registerTexture(id, new NativeImageBackedTexture(img));
+                bgId = id;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            bgId = null;
+        }
+    }
 
     @Override
     public boolean shouldPause() { return false; }
@@ -150,6 +186,15 @@ public class ClickGui extends Screen {
         int wx = (width - ww) / 2, wy = (height - wh) / 2;
         rr(ctx, wx, wy, wx + ww, wy + wh, 2, 0xFF222222);
         rr(ctx, wx + 1, wy + 1, wx + ww - 1, wy + wh - 1, 2, 0xFF0C0C0C);
+        if (bgId != null) {
+            int ix = wx + 1, iy = wy + 1, iw = ww - 2, ih = wh - 2;
+            float winA = (float) iw / ih, imgA = (float) bgW / bgH;
+            int rw, rh, u, v;
+            if (imgA > winA) { rh = bgH; rw = (int) (bgH * winA); u = (bgW - rw) / 2; v = 0; }
+            else { rw = bgW; rh = (int) (bgW / winA); u = 0; v = (bgH - rh) / 2; }
+            ctx.drawTexture(RenderLayer::getGuiTextured, bgId, ix, iy, (float) u, (float) v, iw, ih, rw, rh, bgW, bgH);
+            ctx.fill(ix, iy, ix + iw, iy + ih, BG_DIM);
+        }
 
         // naglowek
         smallCentered(ctx, "Intruz", wx + SW / 2f + 4, wy + 12, PURPLE, 1.6f);
@@ -159,8 +204,25 @@ public class ClickGui extends Screen {
         String title = openModule != null ? openModule.name + " - settings"
                 : (search.isEmpty() ? cat.label : "Search results");
         ctx.drawTextWithShadow(textRenderer, title, ax0, wy + 15, 0xFFFFFFFF);
-        String hint = "RMB: settings   MMB: bind   P: close";
-        ctx.drawTextWithShadow(textRenderer, hint, ax1 - textRenderer.getWidth(hint), wy + 15, 0xFF666666);
+        // profil: glowka aktualnego skina + nick
+        int hintRight = ax1;
+        var mcl = MinecraftClient.getInstance();
+        if (mcl.player != null) {
+            String nick = mcl.player.getName().getString();
+            int bw = 6 + 16 + 6 + textRenderer.getWidth(nick) + 8;
+            int bx = ax1 - bw, by = wy + 8;
+            rr(ctx, bx, by, bx + bw, by + 24, 2, 0xFF222222);
+            rr(ctx, bx + 1, by + 1, bx + bw - 1, by + 23, 2, 0xC0141414);
+            var skin = mcl.player.getSkinTextures().texture();
+            ctx.drawTexture(RenderLayer::getGuiTextured, skin, bx + 6, by + 4, 8f, 8f, 16, 16, 8, 8, 64, 64);
+            ctx.drawTexture(RenderLayer::getGuiTextured, skin, bx + 6, by + 4, 40f, 8f, 16, 16, 8, 8, 64, 64);
+            ctx.drawTextWithShadow(textRenderer, nick, bx + 28, by + 8, 0xFFFFFFFF);
+            hintRight = bx - 10;
+        }
+        String hint = "RMB: settings   MMB: bind";
+        int hintW = textRenderer.getWidth(hint);
+        if (hintRight - hintW > ax0 + textRenderer.getWidth(title) + 10)
+            ctx.drawTextWithShadow(textRenderer, hint, hintRight - hintW, wy + 15, 0xFF666666);
 
         drawSidebar(ctx, mx, my, wx, wy, wh);
 
@@ -172,7 +234,7 @@ public class ClickGui extends Screen {
         int sx0 = wx + 8, sx1 = wx + SW - 2;
 
         // szukajka
-        rr(ctx, sx0, wy + 46, sx1, wy + 62, 2, searching ? 0xFF2A2A2A : 0xFF171717);
+        rr(ctx, sx0, wy + 46, sx1, wy + 62, 2, searching ? 0xC02A2A2A : 0xC0171717);
         String st = search.isEmpty() && !searching ? "Search" : search + (searching ? "_" : "");
         ctx.drawTextWithShadow(textRenderer, st, sx0 + 6, wy + 50, search.isEmpty() && !searching ? 0xFF777777 : 0xFFFFFFFF);
         hit(sx0, wy + 46, sx1 - sx0, 16, false, (x, y, b) -> searching = true);
@@ -184,7 +246,7 @@ public class ClickGui extends Screen {
             boolean sel = search.isEmpty() && c == cat;
             boolean hover = in(mx, my, sx0, y, sx1 - sx0, 20);
             if (sel) {
-                rr(ctx, sx0, y, sx1, y + 20, 2, 0xFF161016);
+                rr(ctx, sx0, y, sx1, y + 20, 2, 0xC0161016);
                 ctx.fill(sx0, y + 4, sx0 + 2, y + 16, PURPLE);
             }
             ctx.drawTextWithShadow(textRenderer, c.label, sx0 + 10, y + 6,
@@ -199,7 +261,7 @@ public class ClickGui extends Screen {
         // Panic mode
         int py = wy + wh - 28;
         boolean ph = in(mx, my, sx0, py, sx1 - sx0, 20);
-        rr(ctx, sx0, py, sx1, py + 20, 2, ph ? 0xFF1E1E1E : 0xFF141414);
+        rr(ctx, sx0, py, sx1, py + 20, 2, ph ? 0xC01E1E1E : 0xC0141414);
         ctx.drawCenteredTextWithShadow(textRenderer, "Panic mode", (sx0 + sx1) / 2, py + 6, 0xFF8A8A8A);
         hit(sx0, py, sx1 - sx0, 20, false, (x, yy, b) -> {
             for (Module m : ModuleManager.MODULES) m.setEnabled(false);
@@ -225,7 +287,7 @@ public class ClickGui extends Screen {
 
             boolean hover = in(mx, my, cx, cy, cw, ch) && my >= ay0 && my < ay1;
             rr(ctx, cx, cy, cx + cw, cy + ch, 2, hover ? 0xFF2A2A2A : 0xFF1E1E1E);
-            rr(ctx, cx + 1, cy + 1, cx + cw - 1, cy + ch - 1, 2, hover ? 0xFF161616 : 0xFF111111);
+            rr(ctx, cx + 1, cy + 1, cx + cw - 1, cy + ch - 1, 2, hover ? 0xC0161616 : 0xC0111111);
 
             int tx = cx + cw - 8 - 22;
             int bx = tx - 4 - 26;
@@ -306,7 +368,7 @@ public class ClickGui extends Screen {
     private void drawRow(DrawContext ctx, int mx, int my, Module m, Setting s, int x, int y, int w, int h) {
         boolean hover = in(mx, my, x, y, w, h) && my >= clipY0 && my < clipY1;
         rr(ctx, x, y, x + w, y + h, 2, hover ? 0xFF222222 : 0xFF1A1A1A);
-        rr(ctx, x + 1, y + 1, x + w - 1, y + h - 1, 2, hover ? 0xFF151515 : 0xFF101010);
+        rr(ctx, x + 1, y + 1, x + w - 1, y + h - 1, 2, hover ? 0xC0151515 : 0xC0101010);
         int right = x + w - 8;
 
         if (s == BIND) {
